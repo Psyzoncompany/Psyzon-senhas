@@ -1,0 +1,4 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {derive,seal,open} from '../dist/crypto.js';
+test('cofre criptografa, reabre, rejeita senha incorreta e adulteração',async()=>{const salt=crypto.getRandomValues(new Uint8Array(16));const key=await derive('somente-teste-1234',salt);const items=[{id:'1',title:'Serviço teste',username:'exemplo',password:'segredo-de-teste',url:'',category:'Pessoal',notes:''}];const a=await seal(items,key,salt),b=await seal(items,key,salt);assert.notEqual(a.iv,b.iv);assert.ok(!JSON.stringify(a).includes('segredo-de-teste'));assert.deepEqual((await open(a,'somente-teste-1234')).items,items);await assert.rejects(open(a,'errada'));const bytes=Buffer.from(a.data,'base64');bytes[0]^=1;await assert.rejects(open({...a,data:bytes.toString('base64')},'somente-teste-1234'));await assert.rejects(open({...a,iterations:1},'somente-teste-1234'))});
