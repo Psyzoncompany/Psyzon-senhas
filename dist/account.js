@@ -1,0 +1,3 @@
+export const LOCAL_STORE='cofre-local:v1',LOCAL_BIO='cofre-local:biometric:v1';
+export function accountScope(uid){if(!uid)return {store:LOCAL_STORE,bio:LOCAL_BIO};if(!/^[a-zA-Z0-9_-]{1,128}$/.test(uid))throw Error('Conta inválida.');return {store:`cofre-local:account:${uid}:v1`,bio:`cofre-local:account:${uid}:biometric:v1`}}
+export function checkCloudWrite(actual,expected,next){if(actual!==expected)throw Error('O cofre mudou em outro aparelho. Recarregue a página antes de salvar.');if(new TextEncoder().encode(next).length>900000)throw Error('O cofre atingiu o limite de sincronização. Exporte um backup.');return next}

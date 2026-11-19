@@ -1,26 +1,47 @@
 # Cofre Local
 
-Site estático em português para guardar senhas **apenas no navegador**, com pesquisa, categorias livres, edição, exclusão, cópia e backup criptografado.
+Cofre de senhas com AES-256-GCM, categorias, pesquisa, biometria opcional e backup criptografado. A publicação permanece no mesmo endereço e mantém o cofre local existente.
 
-## Uso
-Abra pelo endereço HTTPS definitivo. Crie uma senha mestra com no mínimo 12 caracteres. Guarde-a: não existe recuperação. Os dados são específicos do navegador, perfil e origem. Não há sincronização; exporte o backup antes de limpar dados, trocar de dispositivo ou mudar o domínio. Restauração substitui o cofre após validação e confirmação.
+## Reabertura no aparelho
 
-## Segurança
-Web Crypto: PBKDF2-HMAC-SHA-256 (600.000 iterações, salt aleatório de 16 bytes), AES-256-GCM e IV aleatório de 12 bytes a cada gravação. Todo o conteúdo, inclusive categorias, é criptografado antes do localStorage. A chave não é exportável e permanece só em memória. Bloqueio ao ocultar a aba ou após 5 minutos sem atividade. Senhas exibidas voltam a ser ocultadas após 15 segundos. Sem bibliotecas externas, fontes remotas, analytics ou chamadas de rede. A área de transferência não é apagada automaticamente.
+**Manter aberto neste dispositivo** vem ativado conforme solicitado. Depois do primeiro desbloqueio, o site persiste uma `CryptoKey` não exportável no IndexedDB do aparelho e pode reabrir o cofre ao recarregar ou reabrir o navegador. Não persiste senha mestra nem senhas em texto aberto. A chave fica acessível ao próprio site neste aparelho: use esta opção somente em aparelho pessoal.
 
-Este projeto não passou por auditoria independente. Um dispositivo comprometido, extensão maliciosa ou alteração maliciosa do site pode acessar dados quando o cofre estiver aberto. Os controles contra alterações concorrentes não substituem um banco transacional; evite editar em várias abas simultaneamente.
+**Bloquear cofre** apaga a chave lembrada, limpa o conteúdo exibido e avisa outras abas. A geração de revogação impede que uma gravação antiga ressuscite o desbloqueio. Ao desligar a opção, volta o bloqueio por saída de aba ou cinco minutos sem atividade. Se o navegador negar IndexedDB, o site informa que pedirá a senha na reabertura.
 
-## Publicação
-Importe o repositório no Vercel: framework Other, saída `dist`, sem instalação ou build. `vercel.json` inclui os cabeçalhos de segurança. Nenhuma senha real deve ser adicionada ao repositório.
+## Google e Firebase
+
+A integração está implementada, mas **desativada até configurar e validar um projeto Firebase**. Não há credenciais inventadas nem uso de outro projeto do usuário. `dist/firebase-config.json` contém `enabled: false`.
+
+Para ativar em projeto dedicado:
+
+1. Conectar o Firebase e identificar o projeto destinado a este cofre.
+2. Registrar uma aplicação Web e preencher `firebase` em `dist/firebase-config.json` com a configuração pública Web (apiKey, authDomain, projectId, appId e demais campos retornados pelo Firebase). Não colocar credenciais administrativas, chave privada ou senha neste arquivo.
+3. Ativar Authentication > Google e autorizar o domínio `cofre-local-rodrigo.rodrigoribeiroalves.chatgpt.site`.
+4. Criar o Firestore e publicar as regras `firebase/firestore.rules`. Em projeto compartilhado, integrar apenas o bloco `/cofreUsers/{userId}/vault/main` às regras existentes; não substituir regras de outros aplicativos. Auditar regras abrangentes existentes: regras que liberem tudo também liberam esse caminho, mesmo com um bloco restritivo.
+5. Validar com duas contas: cada uma só lê e escreve seu próprio documento. Só então mudar `enabled` para `true` e publicar o site.
+
+Auth usa persistência local e Google por popup, com mensagens para popup bloqueado, domínio não autorizado e provedor desativado. O site mantém sua restrição de acesso da hospedagem; login Google não altera quem pode visitar a publicação privada.
+
+Cada UID tem seu cofre, chave lembrada e biometria separados. Firestore recebe **apenas o envelope criptografado** em `cofreUsers/{uid}/vault/main`. A senha mestra continua necessária no primeiro acesso de um aparelho para descriptografar. O login Google por si só não recupera a chave mestra. Sair da conta revoga o desbloqueio lembrado naquele aparelho.
+
+O cofre legado usa `cofre-local:v1`, preservado. A importação para uma conta nova exige a senha mestra do cofre local e um clique explícito; a cópia local não é apagada. Backups podem ser restaurados no cofre selecionado após validação.
+
+A sincronização consulta o servidor antes de abrir o cofre da conta e grava por transação comparando a versão anterior. Falhas de rede e conflitos não sobrescrevem o cofre remoto; recarregue antes de editar. Não há sincronização silenciosa de gravações offline. O limite de envelope é 900 KB para caber em um documento Firestore.
+
+## Criptografia e backup
+
+PBKDF2-HMAC-SHA-256 com 600.000 iterações, salt aleatório de 16 bytes, AES-256-GCM e IV aleatório de 12 bytes por gravação. A senha mestra não pode ser recuperada. Exporte um backup antes de limpar dados do navegador. Chaves lembradas e biometria não integram o backup.
+
+Face ID / biometria usa WebAuthn PRF, HKDF-SHA-256 e chave envolvida. Verificação do usuário é obrigatória; erros mantêm o acesso por senha mestra. Exige HTTPS e autenticador compatível; validar em iPhone real. Senhas mostradas são ocultadas após 15 segundos. A área de transferência não é apagada automaticamente.
+
+O projeto não passou por auditoria independente. Um aparelho, extensão ou origem comprometidos podem acessar o conteúdo quando o cofre está aberto ou com reabertura habilitada.
 
 ## Verificação
-`node --test tests/crypto.test.mjs`
 
-## Face ID e chaves de acesso
-Depois de abrir o cofre com a senha mestra, selecione **Ativar Face ID / biometria**. Confirme a senha, crie uma chave de acesso e confirme a biometria para ativar. No próximo acesso, use **Entrar com Face ID**. O sistema escolhe Face ID, Touch ID ou código/PIN; a página não pode exigir exclusivamente reconhecimento facial.
+`node --test tests/*.test.mjs`
 
-Requer HTTPS, autenticador de plataforma e WebAuthn PRF funcional (Safari 18 ou mais recente em dispositivos Apple compatíveis). A compatibilidade é verificada durante o cadastro. Falhas ou cancelamentos mantêm o desbloqueio por senha mestra. Abra diretamente no Safari se o navegador interno de um app impedir a operação.
+Cobertura: criptografia, adulteração, biometria, isolamento de namespaces, CryptoKey não exportável, ordenação de gravação/revogação, reabertura do app, bloqueio manual, preferência desligada e rejeição de conflitos na sincronização. Os testes locais não substituem a validação de OAuth real nem das regras publicadas no Firebase.
 
-O segredo PRF deriva uma chave AES-GCM via HKDF-SHA-256 para envolver a chave do cofre. Apenas a chave envolvida, identificador da credencial, IV e salts são persistidos. Senha mestra e chave de acesso em claro não são salvas. Verificação do usuário é obrigatória e o contexto da resposta (origem, desafio e RP ID) é conferido. O segredo PRF é a barreira criptográfica local; isto não é um serviço de autenticação remota. A chave de acesso pode sincronizar pelo iCloud, mas os registros do cofre não sincronizam.
+## Hospedagem
 
-A ativação pertence ao endereço e navegador. Backups não incluem biometria: ative novamente após restaurar ou trocar de endereço. Desativar remove a configuração local; a credencial pode ser excluída no gerenciador de senhas do sistema. Verificação nativa tem timeout e não é tratada como troca comum de aba; as senhas ficam ocultas enquanto a janela nativa está aberta. A integração precisa ser validada em um iPhone real; os testes automatizados não substituem o hardware Apple.
+Site estático com saída `dist`, sem build nem instalação. `.openai/hosting.json` preserva a identidade Sites. `vercel.json` mantém cabeçalhos de segurança e CSP limitada ao próprio site e aos serviços necessários do Firebase. SDK Web Firebase 12.6.0 é carregado de gstatic somente quando a integração está configurada.
